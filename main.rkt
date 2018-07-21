@@ -11,6 +11,8 @@
 (provide (all-defined-out))
 
 ;------------------------
+
+;------------------------
 ; Create a subgraph from a subset of vertices in a graph
 ; subgraph :: Graph -> [Vertex] -> Graph
 
@@ -71,14 +73,71 @@
   (for/hash ([p (all-paths G u v)])
     (values p (f G p))))
 
+
+;------------------------
+; Find all cliques using Bron-Kerbosch
+; https://towardsdatascience.com/graphs-paths-bron-kerbosch-maximal-cliques-e6cab843bc2c
+
+(define (find-maximal-cliques G)
+
+  ;BronKerbosch1(R, P, X):
+  ;  if P and X are both empty:
+  ;    report R as a maximal clique
+  ;  for each vertex v in P:
+  ;    BronKerbosch1(
+  ;      R ⋃ {v}, 
+  ;      P ⋂ N(v), 
+  ;      X ⋂ N(v)
+  ;    )
+  ;    P := P \ {v}
+  ;    X := X ⋃ {v}
+  (define (bron-kerbosch G acc r p x)
+    (if (and (set-empty? p)
+             (set-empty? x))
+        (append acc (list (set->list r)))
+        ;else
+        (begin
+          (for* ([v (in-set p)])
+            (define nv (list->set (get-neighbors G v)))
+            (set! acc (bron-kerbosch G
+                                     acc
+                                     (set-add r v)
+                                     (set-intersect p nv)
+                                     (set-intersect x nv)))
+            (set! p (set-remove p v))
+            (set! x (set-add x v)))
+          acc)))
+
+  (define R (set))
+  (define P (list->set (get-vertices G)))
+  (define X (set))
+  (define accum '())
+  
+  (bron-kerbosch G accum R P X))
+
+(define g0 (unweighted-graph/undirected
+            '((amy erin)
+              (amy jack)
+              (erin jack)
+              (erin sally))))
+  
 ;------------------------
 ;------------------------
 (module+ test
   (require rackunit
            rackunit/text-ui)
-  ; Unit tests here
-  )
 
+  ; Test data
+  
+  ; Tests
+  (define graph-ext-tests
+    (test-suite
+     "graph-ext unit tests"
+     (check-true (graph? g0))
+     (check-equal? (length (find-maximal-cliques g0))
+                   2)))
+  
+  (run-tests graph-ext-tests))
 ;------------------------
 (module+ main
   ;; Main entry point, executed when run with the `racket` executable or DrRacket.
