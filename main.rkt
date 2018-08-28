@@ -5,12 +5,22 @@
 
 (require racket/function
          racket/set
+         racket/list
          data/queue
-         graph)
+         graph
+         xml)
 
 (provide (all-defined-out))
 
-;------------------------
+; Main functions:
+; - subgraph
+; - get-nearest
+; - all-paths
+; - all-path-fn
+; - find-maximal-cliques
+; - create-gexf
+; - write-gexf
+
 
 ;------------------------
 ; Create a subgraph from a subset of vertices in a graph
@@ -115,14 +125,45 @@
   
   (bron-kerbosch G accum R P X))
 
-(define g0 (unweighted-graph/undirected
-            '((amy erin)
-              (amy jack)
-              (erin jack)
-              (erin sally))))
+;------------------------
+; Export graph to GEXF
+; For import into visualisation apps like Gephi
+; It assumes that the graph is undirected.
+
+(define (create-gexf G)
+  (define gr '(graph ((defaultedgetype "undirected"))))
+  (define xnodes (for/list ([v (get-vertices G)])
+                   `(node ((id ,(symbol->string v))
+                           (label ,(symbol->string v))))))
+  (define xedges (for/list ([e (get-edges G)])
+                   `(edge ((id ,(symbol->string (gensym)))
+                           (source ,(symbol->string (first e)))
+                           (target ,(symbol->string (second e)))
+                           (weight ,(number->string (edge-weight G (first e)
+                                                                 (second e))))))))
   
+  (string-append "<?xml version='1.0' encoding='utf-8'?>"
+                 (xexpr->string
+                  `(,@gr (nodes () ,@xnodes)
+                         (edges () ,@xedges)))))
+
+; Write GEXF to a file
+(define (write-gexf G fname)
+  (call-with-output-file fname #:exists 'replace
+    (λ (out) (display (create-gexf G) out))))
+
 ;------------------------
+; Test data
+
+(define g0 (weighted-graph/undirected
+            '((1 amy erin)
+              (2 amy jack)
+              (2 erin jack)
+              (3 erin sally))))
+
 ;------------------------
+; Unit tests
+
 (module+ test
   (require rackunit
            rackunit/text-ui)
@@ -133,11 +174,29 @@
   (define graph-ext-tests
     (test-suite
      "graph-ext unit tests"
+     
      (check-true (graph? g0))
-     (check-equal? (length (find-maximal-cliques g0))
-                   2)))
+     (check-equal? (length (get-vertices g0)) 4)
+
+     ; Subgraph
+     (let ([g1 (subgraph g0 '(amy erin jack))])
+       (check-equal? (length (get-vertices g1)) 3))
+
+     (test-case
+      "All paths"
+      (check-equal? (length (all-paths g0 'amy 'sally)) 2)
+      (check-equal? (all-path-fn (λ (g p) (length p)) g0 'amy 'sally)
+                    '#hash(((amy erin sally) . 3) ((amy jack erin sally) . 4))))
+     
+     (check-equal? (length (find-maximal-cliques g0)) 2)
+
+     (test-case
+      "GEXF export"
+      (let ([x (create-gexf g0)])
+        (check-true (string? x))))))
   
   (run-tests graph-ext-tests))
+
 ;------------------------
 (module+ main
   ;; Main entry point, executed when run with the `racket` executable or DrRacket.
