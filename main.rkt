@@ -13,15 +13,34 @@
 (provide (all-defined-out))
 
 ; Main functions:
+; - count-vertices
+; - count-edges
+; - undirected?
 ; - subgraph
 ; - get-nearest
 ; - all-paths
 ; - all-path-fn
 ; - find-maximal-cliques
+; - density
 ; - create-gexf
 ; - write-gexf
 
+;------------------------
+; Check if undirected.
+; Not very efficient implementation.
+(define (undirected? G)
+  (define edges (get-edges G))
+  (equal? (sort (map first edges) symbol<?)
+          (sort (map second edges) symbol<?)))
 
+;------------------------
+; Count things
+(define (count-vertices G)
+  (length (get-vertices G)))
+
+(define (count-edges G)
+  (length (get-edges G)))
+  
 ;------------------------
 ; Create a subgraph from a subset of vertices in a graph
 ; subgraph :: Graph -> [Vertex] -> Graph
@@ -126,6 +145,18 @@
   (bron-kerbosch G accum R P X))
 
 ;------------------------
+; Calculate the graph density
+; For an undirected graph, only use one edge between two vertices 
+(define (density G)
+  (let ([r (count-edges G)]
+        [n (count-vertices G)])
+    
+    (if (undirected? G)
+        (/ r (* n (- n 1)))
+        (/ (* 2 r) (* n (- n 1))))
+    ))
+
+;------------------------
 ; Export graph to GEXF
 ; For import into visualisation apps like Gephi
 ; It assumes that the graph is undirected.
@@ -153,15 +184,6 @@
     (λ (out) (display (create-gexf G) out))))
 
 ;------------------------
-; Test data
-
-(define g0 (weighted-graph/undirected
-            '((1 amy erin)
-              (2 amy jack)
-              (2 erin jack)
-              (3 erin sally))))
-
-;------------------------
 ; Unit tests
 
 (module+ test
@@ -169,6 +191,11 @@
            rackunit/text-ui)
 
   ; Test data
+  (define g0 (weighted-graph/undirected
+              '((1 amy erin)
+                (2 amy jack)
+                (2 erin jack)
+                (3 erin sally))))
   
   ; Tests
   (define graph-ext-tests
@@ -176,11 +203,12 @@
      "graph-ext unit tests"
      
      (check-true (graph? g0))
-     (check-equal? (length (get-vertices g0)) 4)
+     (check-equal? (count-vertices g0) 4)
+     (check-true (undirected? g0))
 
      ; Subgraph
      (let ([g1 (subgraph g0 '(amy erin jack))])
-       (check-equal? (length (get-vertices g1)) 3))
+       (check-equal? (count-vertices g1) 3))
 
      (test-case
       "All paths"
@@ -190,6 +218,8 @@
      
      (check-equal? (length (find-maximal-cliques g0)) 2)
 
+     (check-equal? (density g0) 2/3)
+     
      (test-case
       "GEXF export"
       (let ([x (create-gexf g0)])
